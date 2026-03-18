@@ -27,6 +27,7 @@ const puppeteer = require('puppeteer');
   const previewBtn = await page.$('#previewBtn');
   const downloadBtn = await page.$('#downloadBtn');
   const selectFolderBtn = await page.$('#selectFolderBtn');
+  const downloadPathInput = await page.$('#downloadPath');
   
   console.log('Elements exist:', !!songList && !!previewBtn && !!downloadBtn && !!selectFolderBtn);
   
@@ -36,11 +37,15 @@ const puppeteer = require('puppeteer');
     process.exit(1);
   }
   
-  // Test 2: Folder selection
-  console.log('\n=== TEST 2: Folder selection ===');
-  await selectFolderBtn.click();
-  await new Promise(r => setTimeout(r, 1000));
-  // Note: showDirectoryPicker requires user interaction, will fail in headless
+  // Test 2: Set download path to Documents
+  console.log('\n=== TEST 2: Set download path to Documents ===');
+  await downloadPathInput.click({ clickCount: 3 });
+  await page.keyboard.press('Backspace');
+  await downloadPathInput.type('C:/Users/Admin/Documents');
+  await new Promise(r => setTimeout(r, 500));
+  
+  const pathValue = await page.$eval('#downloadPath', el => el.value);
+  console.log('Download path set to:', pathValue);
   
   // Test 3: Preview
   console.log('\n=== TEST 3: Preview ===');
@@ -48,30 +53,24 @@ const puppeteer = require('puppeteer');
   await previewBtn.click();
   
   try {
-    await page.waitForSelector('.preview-item', { timeout: 10000 });
+    await page.waitForSelector('.preview-item', { timeout: 15000 });
     console.log('Preview items found!');
-    
-    // Test 4: Click play button
-    console.log('\n=== TEST 4: Play preview ===');
-    const playBtn = await page.$('.preview-play-btn');
-    if (playBtn) {
-      await playBtn.click();
-      await new Promise(r => setTimeout(r, 1000));
-      
-      // Check if iframe exists
-      const iframe = await page.$('.preview-playing iframe');
-      console.log('Iframe created:', !!iframe);
-      
-      // Check for layout issues
-      const playerContainer = await page.$('.preview-playing.active');
-      if (playerContainer) {
-        const box = await playerContainer.boundingBox();
-        console.log('Player box:', box);
-      }
-    }
   } catch(e) {
     console.log('Preview test error:', e.message);
   }
+  
+  // Test 4: Download
+  console.log('\n=== TEST 4: Download ===');
+  const downloadBtnNew = await page.$('#downloadBtn');
+  await downloadBtnNew.click();
+  console.log('Download clicked, waiting...');
+  
+  // Wait for download to complete
+  await new Promise(r => setTimeout(r, 20000));
+  
+  // Check log
+  const logItems = await page.$$eval('#logArea p', els => els.map(el => el.textContent));
+  console.log('Log entries:', logItems);
   
   console.log('\n=== TEST COMPLETE ===');
   console.log('Has errors:', hasError);

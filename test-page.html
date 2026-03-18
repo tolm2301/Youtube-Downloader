@@ -1,33 +1,4 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { exec } = require('child_process');
-const search = require('yt-search');
-
-const app = express();
-const PORT = 3000;
-
-const userHome = os.homedir().replace(/\\/g, '/');
-const defaultDownloadPath = path.join(__dirname, 'downloads').replace(/\\/g, '/');
-const downloadPath = defaultDownloadPath;
-
-if (!fs.existsSync(downloadPath)) {
-  fs.mkdirSync(downloadPath, { recursive: true });
-}
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use((req, res, next) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
-  next();
-});
-
-app.get('/', (req, res) => {
-  res.send(`<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -485,13 +456,12 @@ Tên bài hát 3"></textarea>
     </div>
     
     <div class="path-input-group">
-      <select id="folderSelect" style="padding: 12px; border-radius: 12px; border: 2px solid #e2e8f0; font-size: 14px; background: #f8fafc; cursor: pointer; min-width: 200px;">
-        <option value="">-- Chọn thư mục --</option>
-      </select>
-      <input type="text" id="downloadPath" placeholder="Hoặc nhập đường dẫn tùy chỉnh" value="">
+      <input type="text" id="downloadPath" placeholder="Nhập đường dẫn: C:/Users/Admin/Documents" value="C:/Users/Admin/Desktop/MusicTool/downloads">
+      <input type="file" id="folderInput" webkitdirectory directory style="display:none">
+      <button id="selectFolderBtn" class="btn-path">📂 Chọn</button>
     </div>
     
-    <div class="path-display" id="pathDisplay">Đang tải...</div>
+    <div class="path-display" id="pathDisplay">Thư mục lưu: downloads</div>
     
     <div class="stats">
       <div class="stat-item success"><span id="successCount">0</span><p>Thành công</p></div>
@@ -525,61 +495,31 @@ Tên bài hát 3"></textarea>
     const successCount = document.getElementById('successCount');
     const errorCount = document.getElementById('errorCount');
 
-    fetch('/user-paths')
-      .then(res => res.json())
-      .then(paths => {
-        const select = document.getElementById('folderSelect');
-        const folders = [
-          { name: 'Documents', path: paths.home + '/Documents' },
-          { name: 'Downloads', path: paths.home + '/Downloads' },
-          { name: 'Desktop', path: paths.home + '/Desktop' },
-          { name: 'Music', path: paths.home + '/Music' },
-          { name: 'Downloads (mặc định)', path: paths.defaultPath }
-        ];
-        
-        folders.forEach(f => {
-          const opt = document.createElement('option');
-          opt.value = f.path;
-          opt.textContent = f.name;
-          select.appendChild(opt);
-        });
-        
-        downloadPathInput.value = paths.defaultPath;
-        document.getElementById('pathDisplay').textContent = 'Thư mục lưu: ' + paths.defaultPath;
-      })
-      .catch(err => {
-        downloadPathInput.value = 'C:/Downloads';
-        document.getElementById('pathDisplay').textContent = 'Thư mục lưu: C:/Downloads';
-      });
-
-    const folderSelect = document.getElementById('folderSelect');
-    folderSelect.addEventListener('change', () => {
-      if (folderSelect.value) {
-        downloadPathInput.value = folderSelect.value;
-        document.getElementById('pathDisplay').textContent = 'Thư mục lưu: ' + folderSelect.value;
+    selectFolderBtn.addEventListener('click', () => {
+      const userPath = prompt(
+        'Enter download folder path:
+Examples: C:/Users/Admin/Documents',
+        downloadPathInput.value || 'C:/Users/Admin/Documents'
+      );
+      if (userPath) {
+        downloadPathInput.value = userPath;
+        document.getElementById('pathDisplay').textContent = 'Save to: ' + userPath;
+      }
+    });
+    
+    document.getElementById('folderInput').addEventListener('change', (e) => {
+      const path = prompt(
+        'Cannot get folder path from browser. Enter path:',
+        downloadPathInput.value || 'C:/Users/Admin/Documents'
+      );
+      if (path) {
+        downloadPathInput.value = path;
+        document.getElementById('pathDisplay').textContent = 'Save to: ' + path;
       }
     });
 
-    const customFolderBtn = document.createElement('button');
-    customFolderBtn.textContent = '📂 Chọn...';
-    customFolderBtn.className = 'btn-path';
-    customFolderBtn.style.marginLeft = '8px';
-    customFolderBtn.onclick = async () => {
-      try {
-        const res = await fetch('/select-folder', { method: 'POST' });
-        const data = await res.json();
-        if (data.success && data.path) {
-          downloadPathInput.value = data.path;
-          document.getElementById('pathDisplay').textContent = 'Thư mục lưu: ' + data.path;
-        }
-      } catch(e) {
-        console.log('Select folder cancelled');
-      }
-    };
-    folderSelect.parentElement.appendChild(customFolderBtn);
-    
     downloadPathInput.addEventListener('input', () => {
-      document.getElementById('pathDisplay').textContent = 'Thư mục lưu: ' + downloadPathInput.value;
+      document.getElementById('pathDisplay').textContent = 'Save to: ' + downloadPathInput.value;
     });
 
     function log(msg, type) {
@@ -599,7 +539,7 @@ Tên bài hát 3"></textarea>
         if (r.error) {
           div.innerHTML = '<span style="color:#dc2626">' + r.name + ' - Không tìm thấy</span>';
         } else {
-          const videoId = r.videoId.replace(/'/g, "\\'");
+          const videoId = r.videoId.replace(/'/g, "\'");
           div.innerHTML = '<img src="' + r.thumbnail + '" id="thumb-' + index + '" style="cursor:pointer"><div class="preview-info"><div class="title">' + r.title + '</div><div class="meta">' + r.name + ' - ' + r.duration + '</div></div><button class="preview-play-btn" data-id="' + videoId + '" data-index="' + index + '"></button>';
           div.querySelector('#thumb-' + index).addEventListener('click', () => playPreview(videoId, index));
           div.querySelector('.preview-play-btn').addEventListener('click', () => playPreview(videoId, index));
@@ -645,7 +585,7 @@ Tên bài hát 3"></textarea>
     };
 
     previewBtn.addEventListener('click', async () => {
-      const songs = songListInput.value.split('\\n').filter(s => s.trim());
+      const songs = songListInput.value.split('\n').filter(s => s.trim());
       if (songs.length === 0) { log('Vui lòng nhập danh sách bài hát!', 'error'); return; }
       
       previewBtn.disabled = true;
@@ -668,7 +608,7 @@ Tên bài hát 3"></textarea>
     });
 
     downloadBtn.addEventListener('click', async () => {
-      const songs = songListInput.value.split('\\n').filter(s => s.trim());
+      const songs = songListInput.value.split('\n').filter(s => s.trim());
       if (songs.length === 0) { log('Vui lòng nhập danh sách bài hát!', 'error'); return; }
 
       downloadBtn.disabled = true;
@@ -709,110 +649,4 @@ Tên bài hát 3"></textarea>
     });
   </script>
 </body>
-</html>`);
-});
-
-app.post('/download', async (req, res) => {
-  let { songName, downloadPath: customPath } = req.body;
-  
-  if (!customPath || typeof customPath !== 'string' || customPath.trim() === '') {
-    customPath = downloadPath;
-  }
-  
-  customPath = customPath.trim().replace(/\\/g, '/');
-  
-  const targetPath = customPath;
-  
-  try {
-    if (!fs.existsSync(targetPath)) {
-      fs.mkdirSync(targetPath, { recursive: true });
-    }
-    
-    const searchResults = await search(songName + ' audio');
-    const video = searchResults.all[0];
-    
-    if (!video) {
-      return res.json({ success: false, error: 'No video found' });
-    }
-
-    const safeName = songName.replace(/[<>:"/\\|?*]/g, '').trim();
-    const outputTemplate = path.join(targetPath, safeName + '.mp3').replace(/\\/g, '/');
-
-    await new Promise((resolve, reject) => {
-      const cmd = `yt-dlp --no-warnings -x --audio-format mp3 -o "${outputTemplate}" "https://www.youtube.com/watch?v=${video.videoId}"`;
-      exec(cmd, { encoding: 'utf8' }, (err, stdout, stderr) => {
-        if (err) {
-          const errorMsg = stderr || stdout || err.message;
-          reject(new Error(errorMsg));
-        } else {
-          resolve();
-        }
-      });
-    });
-
-    res.json({ success: true, title: video.title, path: outputTemplate, savedTo: targetPath });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
-
-app.post('/preview', async (req, res) => {
-  const { songs } = req.body;
-  
-  try {
-    const results = [];
-    for (const songName of songs) {
-      try {
-        const searchResults = await search(songName + ' audio');
-        const video = searchResults.all[0];
-        if (video) {
-          results.push({
-            name: songName,
-            title: video.title,
-            thumbnail: video.thumbnail,
-            videoId: video.videoId,
-            duration: video.timestamp
-          });
-        } else {
-          results.push({ name: songName, error: true });
-        }
-      } catch (e) {
-        results.push({ name: songName, error: true });
-      }
-    }
-    res.json({ success: true, results });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
-
-app.get('/favicon.ico', (req, res) => {
-  res.status(204).end();
-});
-
-app.get('/user-paths', (req, res) => {
-  res.json({
-    home: userHome,
-    defaultPath: defaultDownloadPath
-  });
-});
-
-app.post('/select-folder', async (req, res) => {
-  const { exec } = require('child_process');
-  
-  exec('powershell -Command "[System.Reflection.Assembly]::LoadWithPartialName(\'System.Windows.Forms\') | Out-Null; $dialog = New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description = \'Chon thu muc luu nhac\'; if ($dialog.ShowDialog() -eq \'OK\') { $dialog.SelectedPath }"', 
-    (err, stdout) => {
-      if (err || !stdout.trim()) {
-        return res.json({ success: false });
-      }
-      res.json({ success: true, path: stdout.trim().replace(/\\/g, '/') });
-    }
-  );
-});
-
-app.get('/ping', (req, res) => res.json({ ok: true }));
-
-app.listen(PORT, () => {
-  console.log('YouTube Music Downloader running at http://localhost:' + PORT);
-  console.log('Download path: ' + downloadPath);
-});
+</html>
