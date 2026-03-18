@@ -117,6 +117,43 @@
       font-size: 12px;
       color: #666;
     }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-row .btn {
+      flex: 1;
+    }
+    .preview-list {
+      margin-top: 20px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .preview-item {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .preview-item img {
+      width: 80px;
+      height: 45px;
+      object-fit: cover;
+      border-radius: 4px;
+      margin-right: 12px;
+    }
+    .preview-item .info {
+      flex: 1;
+    }
+    .preview-item .title {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+    }
+    .preview-item .duration {
+      font-size: 12px;
+      color: #888;
+    }
   </style>
 </head>
 <body>
@@ -130,9 +167,15 @@ Tên bài hát 2
 Tên bài hát 3"></textarea>
     </div>
 
-    <button id="downloadBtn" class="btn">Tải xuống</button>
+    <div class="btn-row">
+      <button id="previewBtn" class="btn" style="background: #27ae60;">Xem trước</button>
+      <button id="downloadBtn" class="btn">Tải xuống</button>
+    </div>
+    <button id="selectFolderBtn" class="btn" style="margin-top: 10px; background: #3498db;">Chọn thư mục lưu</button>
 
     <div class="path-display" id="pathDisplay"></div>
+
+    <div class="preview-list" id="previewList"></div>
 
     <div class="stats">
       <div class="stat-item">
@@ -153,16 +196,69 @@ Tên bài hát 3"></textarea>
 
     const songListInput = document.getElementById('songList');
     const downloadBtn = document.getElementById('downloadBtn');
+    const previewBtn = document.getElementById('previewBtn');
+    const selectFolderBtn = document.getElementById('selectFolderBtn');
     const logArea = document.getElementById('logArea');
     const pathDisplay = document.getElementById('pathDisplay');
+    const previewList = document.getElementById('previewList');
     const successCount = document.getElementById('successCount');
     const errorCount = document.getElementById('errorCount');
 
     let success = 0;
     let error = 0;
+    let selectedDownloadPath = null;
 
     ipcRenderer.invoke('get-download-path').then(path => {
       pathDisplay.textContent = 'Thư mục lưu: ' + path;
+      selectedDownloadPath = path;
+    });
+
+    selectFolderBtn.addEventListener('click', async () => {
+      const folderPath = await ipcRenderer.invoke('select-download-folder');
+      if (folderPath) {
+        selectedDownloadPath = folderPath;
+        pathDisplay.textContent = 'Thư mục lưu: ' + folderPath;
+      }
+    });
+
+    previewBtn.addEventListener('click', async () => {
+      const songs = songListInput.value.split('\n').filter(s => s.trim());
+      
+      if (songs.length === 0) {
+        log('Vui lòng nhập danh sách bài hát!', 'error');
+        return;
+      }
+
+      previewBtn.disabled = true;
+      previewList.innerHTML = '<p style="padding:10px;">Đang tìm kiếm...</p>';
+
+      try {
+        const results = await ipcRenderer.invoke('preview-songs', songs);
+        
+        previewList.innerHTML = '';
+        results.forEach(video => {
+          if (video) {
+            const div = document.createElement('div');
+            div.className = 'preview-item';
+            div.innerHTML = `
+              <img src="${video.thumbnail}" alt="thumbnail">
+              <div class="info">
+                <div class="title">${video.title}</div>
+                <div class="duration">${video.timestamp || 'N/A'}</div>
+              </div>
+            `;
+            previewList.appendChild(div);
+          }
+        });
+
+        if (results.length === 0) {
+          previewList.innerHTML = '<p style="padding:10px;">Không tìm thấy bài hát nào!</p>';
+        }
+      } catch (err) {
+        previewList.innerHTML = '<p style="padding:10px;color:red;">Lỗi: ' + err.message + '</p>';
+      }
+
+      previewBtn.disabled = false;
     });
 
     function log(message, type = 'normal') {
@@ -196,7 +292,7 @@ Tên bài hát 3"></textarea>
       log(`Bắt đầu tải ${songs.length} bài hát...`);
 
       try {
-        const results = await ipcRenderer.invoke('download-music', songs);
+        const results = await ipcRenderer.invoke('download-music', songs, selectedDownloadPath);
         
         results.forEach(r => {
           if (r.status === 'success') {

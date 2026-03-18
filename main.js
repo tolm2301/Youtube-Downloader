@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ytdl = require('ytdl-core');
@@ -7,9 +7,9 @@ const search = require('yt-search');
 let mainWindow;
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+    mainWindow = new BrowserWindow({
     width: 800,
-    height: 650,
+    height: 750,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
@@ -27,10 +27,13 @@ app.on('window-all-closed', () => {
   }
 });
 
-ipcMain.handle('download-music', async (event, songList) => {
+ipcMain.handle('download-music', async (event, songList, downloadPath) => {
   const results = [];
-  const downloadPath = path.join(app.getPath('music'), 'YouTubeDownloads');
   
+  if (!downloadPath) {
+    downloadPath = app.getPath('music');
+  }
+
   if (!fs.existsSync(downloadPath)) {
     fs.mkdirSync(downloadPath, { recursive: true });
   }
@@ -70,6 +73,44 @@ ipcMain.handle('download-music', async (event, songList) => {
   return results;
 });
 
+ipcMain.handle('select-download-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Chọn thư mục lưu nhạc'
+  });
+  
+  if (result.canceled) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
 ipcMain.handle('get-download-path', () => {
-  return path.join(app.getPath('music'), 'YouTubeDownloads');
+  return app.getPath('music');
+});
+
+ipcMain.handle('preview-songs', async (event, songList) => {
+  const results = [];
+  
+  for (const songName of songList) {
+    try {
+      const searchResults = await search(songName + ' audio');
+      const video = searchResults.all[0];
+      
+      if (video) {
+        results.push({
+          title: video.title,
+          thumbnail: video.thumbnail,
+          timestamp: video.timestamp,
+          videoId: video.videoId
+        });
+      } else {
+        results.push(null);
+      }
+    } catch (error) {
+      results.push(null);
+    }
+  }
+
+  return results;
 });
