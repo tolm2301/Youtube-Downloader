@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Music Downloader</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .input-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #555;
+      font-weight: 600;
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      resize: vertical;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .progress {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .progress p {
+      padding: 5px 0;
+      font-size: 13px;
+      color: #666;
+    }
+    .progress p.error {
+      color: #e74c3c;
+    }
+    .progress p.success {
+      color: #27ae60;
+    }
+    .path-display {
+      margin-top: 15px;
+      padding: 10px;
+      background: #e8f4f8;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #2980b9;
+    }
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 15px;
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-item span {
+      font-size: 24px;
+      font-weight: bold;
+      color: #667eea;
+    }
+    .stat-item p {
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>YouTube Music Downloader</h1>
+    
+    <div class="input-group">
+      <label for="songList">Danh sách bài hát (mỗi bài một dòng):</label>
+      <textarea id="songList" placeholder="Tên bài hát 1
+Tên bài hát 2
+Tên bài hát 3"></textarea>
+    </div>
+
+    <button id="downloadBtn" class="btn">Tải xuống</button>
+
+    <div class="path-display" id="pathDisplay"></div>
+
+    <div class="stats">
+      <div class="stat-item">
+        <span id="successCount">0</span>
+        <p>Thành công</p>
+      </div>
+      <div class="stat-item">
+        <span id="errorCount">0</span>
+        <p>Thất bại</p>
+      </div>
+    </div>
+
+    <div class="progress" id="logArea"></div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const songListInput = document.getElementById('songList');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const logArea = document.getElementById('logArea');
+    const pathDisplay = document.getElementById('pathDisplay');
+    const successCount = document.getElementById('successCount');
+    const errorCount = document.getElementById('errorCount');
+
+    let success = 0;
+    let error = 0;
+
+    ipcRenderer.invoke('get-download-path').then(path => {
+      pathDisplay.textContent = 'Thư mục lưu: ' + path;
+    });
+
+    function log(message, type = 'normal') {
+      const p = document.createElement('p');
+      p.textContent = message;
+      if (type === 'error') p.className = 'error';
+      if (type === 'success') p.className = 'success';
+      logArea.appendChild(p);
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    ipcRenderer.on('log', (event, message, type) => {
+      log(message, type);
+    });
+
+    downloadBtn.addEventListener('click', async () => {
+      const songs = songListInput.value.split('\n').filter(s => s.trim());
+      
+      if (songs.length === 0) {
+        log('Vui lòng nhập danh sách bài hát!', 'error');
+        return;
+      }
+
+      downloadBtn.disabled = true;
+      success = 0;
+      error = 0;
+      successCount.textContent = '0';
+      errorCount.textContent = '0';
+      logArea.innerHTML = '';
+
+      log(`Bắt đầu tải ${songs.length} bài hát...`);
+
+      try {
+        const results = await ipcRenderer.invoke('download-music', songs);
+        
+        results.forEach(r => {
+          if (r.status === 'success') {
+            success++;
+          } else {
+            error++;
+          }
+        });
+
+        successCount.textContent = success;
+        errorCount.textContent = error;
+        log('Hoàn tất!', 'success');
+      } catch (err) {
+        log('Lỗi: ' + err.message, 'error');
+      }
+
+      downloadBtn.disabled = false;
+    });
+  </script>
+</body>
+</html>
