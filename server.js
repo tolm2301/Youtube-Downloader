@@ -482,6 +482,7 @@ Tên bài hát 3"></textarea>
     
     <div class="path-input-group">
       <input type="text" id="downloadPath" placeholder="Đường dẫn thư mục lưu..." value="C:/Users/Admin/Desktop/MusicTool/downloads">
+      <input type="file" id="folderInput" webkitdirectory directory style="display:none">
       <button id="selectFolderBtn" class="btn-path">📂 Chọn</button>
     </div>
     
@@ -519,20 +520,15 @@ Tên bài hát 3"></textarea>
     const successCount = document.getElementById('successCount');
     const errorCount = document.getElementById('errorCount');
 
-    selectFolderBtn.addEventListener('click', async () => {
-      try {
-        if (window.showDirectoryPicker) {
-          const dirHandle = await window.showDirectoryPicker();
-          downloadPathInput.value = dirHandle.name;
-        } else {
-          const path = prompt('Nhập đường dẫn thư mục lưu nhạc:');
-          if (path) downloadPathInput.value = path;
-        }
-      } catch (e) {
-        if (e.name !== 'AbortError') {
-          const path = prompt('Nhập đường dẫn thư mục lưu nhạc:');
-          if (path) downloadPathInput.value = path;
-        }
+    selectFolderBtn.addEventListener('click', () => {
+      document.getElementById('folderInput').click();
+    });
+    
+    document.getElementById('folderInput').addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        const path = e.target.files[0].webkitRelativePath.split('/')[0];
+        downloadPathInput.value = path;
+        document.getElementById('pathDisplay').textContent = 'Thư mục lưu: ' + path;
       }
     });
 
